@@ -14,7 +14,7 @@ class RoleMeta(type):
 
         super(RoleMeta, cls).__init__(name, bases, dct)
 
-    def __and__(cls, other_cls):
+    def __and__(cls, other):
         """
         Generate a class whose `is_active` and `_has_permission` methods
         return the logical AND joining of their source classes' methods of the
@@ -23,18 +23,18 @@ class RoleMeta(type):
         def is_active(self, request, view):
             return all(
                 role.is_active(request, view) for role in
-                self._joined_role_instances
-            )
+                self._joined_role_instances)
 
         def has_permission(self, request, view):
             return all(
                 role._has_permission(request, view) for role in
-                self._joined_role_instances
-            )
+                self._joined_role_instances)
 
-        return _create_joined_class(is_active, has_permission, cls, other_cls)
+        cls_name = 'And'.join((cls.__name__, other.__name__)) + 'JoinedRole'
+        return _create_joined_class(
+            cls_name, is_active, has_permission, cls, other)
 
-    def __or__(cls, other_cls):
+    def __or__(cls, other):
         """
         Generate a class whose `is_active` and `_has_permission` methods
         return the logical OR joining of their source classes' methods of the
@@ -43,16 +43,16 @@ class RoleMeta(type):
         def is_active(self, request, view):
             return any(
                 role.is_active(request, view) for role in
-                self._joined_role_instances
-            )
+                self._joined_role_instances)
 
         def has_permission(self, request, view):
             return any(
                 role._has_permission(request, view) for role in
-                self._joined_role_instances
-            )
+                self._joined_role_instances)
 
-        return _create_joined_class(is_active, has_permission, cls, other_cls)
+        cls_name = 'Or'.join((cls.__name__, other.__name__)) + 'JoinedRole'
+        return _create_joined_class(
+            cls_name, is_active, has_permission, cls, other)
 
     def __invert__(cls):
         """
@@ -63,16 +63,15 @@ class RoleMeta(type):
         def is_active(self, request, view):
             return not all(
                 role.is_active(request, view) for role in
-                self._joined_role_instances
-            )
+                self._joined_role_instances)
 
         def has_permission(self, request, view):
             return not all(
                 role._has_permission(request, view) for role in
-                self._joined_role_instances
-            )
+                self._joined_role_instances)
 
-        return _create_joined_class(is_active, has_permission, cls)
+        class_name = 'Not' + cls.__name__
+        return _create_joined_class(class_name, is_active, has_permission, cls)
 
 
 class Role(with_metaclass(RoleMeta, object)):
@@ -184,7 +183,8 @@ class Role(with_metaclass(RoleMeta, object)):
         pass
 
 
-def _create_joined_class(new_is_active, new_has_permission, *joined_roles):
+def _create_joined_class(class_name, new_is_active, new_has_permission,
+                         *joined_roles):
     """
     Generates a class whose core boolean methods (`is_active` and
     `_has_permission`) are derived from boolean operations on the provided
@@ -196,8 +196,7 @@ def _create_joined_class(new_is_active, new_has_permission, *joined_roles):
 
         def __init__(self, request, view):
             self._joined_role_instances = tuple(
-                role_cls(request, view) for role_cls in self._joined_roles
-            )
+                role_cls(request, view) for role_cls in self._joined_roles)
             super(JoinedRole, self).__init__(request, view)
 
         def get_permissions(self, request, view):
@@ -205,5 +204,7 @@ def _create_joined_class(new_is_active, new_has_permission, *joined_roles):
 
         is_active = new_is_active
         _has_permission = new_has_permission
+
+    JoinedRole.__name__ = class_name
 
     return JoinedRole
