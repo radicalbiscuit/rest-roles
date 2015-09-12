@@ -201,7 +201,7 @@ def _create_joined_class(new_is_active, new_has_permission, *joined_roles):
             super(JoinedRole, self).__init__(request, view)
 
         def get_permissions(self, request, view):
-            raise NotImplementedError('As a joined Rp')
+            return {}
 
         is_active = new_is_active
         _has_permission = new_has_permission
