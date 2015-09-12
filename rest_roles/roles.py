@@ -121,14 +121,15 @@ class Role(with_metaclass(RoleMeta, object)):
         permissions = self.get_permissions(request, view)
 
         # Retrieve the permissions specific to the current view
-        view = self._get_viewset(request, view)
+        view_cls = view.cls
         if ALL_VIEWS in permissions:
             if len(permissions) > 1:
-                raise RoleConfigurationError('When using ALL_VIEWS, other '
-                    'views may not be defined in your permissions')
+                raise RoleConfigurationError(
+                    'When using ALL_VIEWS, other views may not be defined in '
+                    'your permissions')
             view_permissions = permissions[ALL_VIEWS]
-        elif view in permissions:
-            view_permissions = permissions[view]
+        elif view_cls in permissions:
+            view_permissions = permissions[view_cls]
         else:
             return False
 
@@ -136,9 +137,9 @@ class Role(with_metaclass(RoleMeta, object)):
         action = self._get_action(request, view)
         if ALL_ACTIONS in view_permissions:
             if len(permissions) > 1:
-                raise RoleConfigurationError('When using ALL_ACTIONS, other '
-                    'actions may not be defined in your permissions for the '
-                    'view')
+                raise RoleConfigurationError(
+                    'When using ALL_ACTIONS, other actions may not be defined '
+                    'in your permissions for the view')
             action_permissions = view_permissions[ALL_ACTIONS]
         elif action in view_permissions:
             action_permissions = view_permissions[action]
@@ -146,16 +147,13 @@ class Role(with_metaclass(RoleMeta, object)):
             return False
 
         # Enforce the field-level and row-level permissions
-        self._enforce_fields(request, view, action_permissions['fields'])
-        self._enforce_restrictions(request, view,
-            action_permissions['restrictions'])
+        self._enforce_fields(
+            request, view, action_permissions['fields'])
+        self._enforce_restrictions(
+            request, view, action_permissions['restrictions'])
 
         # At this point, you have permission, congratulations!
         return True
-
-    def _get_view(self, request, view):
-        """Retrieves the root class for the view for this request."""
-        pass
 
     def _get_action(self, request, view):
         """Retrieve the action being attempted in this request."""
@@ -164,7 +162,7 @@ class Role(with_metaclass(RoleMeta, object)):
     def _enforce_fields(self, request, view, fields):
         """Dynamically restrict the fields in the serializer."""
         # See here for potential code to steal or repurpose:
-        # https://gist.github.com/jeffschenck/ca7218cac2191b392043#file-serializer_field_restriction-py
+        # https://gist.github.com/jeffschenck/ca7218cac2191b392043
         pass
 
     def _enforce_restrictions(self, request, view, restrictions):
