@@ -27,6 +27,7 @@ with open(os.path.join(dirname, 'HISTORY.md')) as history_file:
 # Organize requirements
 install_requires = [
     'djangorestframework>=3.0',
+    'six',
 ]
 tests_requires = [
     'pytest',

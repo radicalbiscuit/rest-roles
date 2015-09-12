@@ -1,23 +1,83 @@
-from __future__ import relative_imports
+from six import with_metaclass
 
-from . import ALL_ACTIONS, ALL_VIEWS, RoleConfigurationError
+from base import ALL_ACTIONS, ALL_VIEWS, RoleConfigurationError
 
 
-class RoleMeta(object):
+class RoleMeta(type):
     """Metaclass to register role classes."""
     registry = []
 
-    def __new__(cls, name, bases, dct):
+    def __init__(cls, name, bases, dct):
         """Register all roles created in the system."""
-        role_cls = super(RoleMeta, cls).__new__(cls, name, bases, dct)
-        if role_cls != Role:
-            cls.registry.append(role_cls)
+        if dct.pop('__register__', True):
+            cls.registry.append(cls)
+
+        super(RoleMeta, cls).__init__(name, bases, dct)
+
+    def __and__(cls, other_cls):
+        """
+        Generate a class whose `is_active` and `_has_permission` methods
+        return the logical AND joining of their source classes' methods of the
+        same name.
+        """
+        def is_active(self, request, view):
+            return all(
+                role.is_active(request, view) for role in
+                self._joined_role_instances
+            )
+
+        def has_permission(self, request, view):
+            return all(
+                role._has_permission(request, view) for role in
+                self._joined_role_instances
+            )
+
+        return _create_joined_class(is_active, has_permission, cls, other_cls)
+
+    def __or__(cls, other_cls):
+        """
+        Generate a class whose `is_active` and `_has_permission` methods
+        return the logical OR joining of their source classes' methods of the
+        same name.
+        """
+        def is_active(self, request, view):
+            return any(
+                role.is_active(request, view) for role in
+                self._joined_role_instances
+            )
+
+        def has_permission(self, request, view):
+            return any(
+                role._has_permission(request, view) for role in
+                self._joined_role_instances
+            )
+
+        return _create_joined_class(is_active, has_permission, cls, other_cls)
+
+    def __invert__(cls):
+        """
+        Generate a class whose `is_active` and `_has_permission` methods
+        return the logical NOT joining of their source classes methods of the
+        same name.
+        """
+        def is_active(self, request, view):
+            return not all(
+                role.is_active(request, view) for role in
+                self._joined_role_instances
+            )
+
+        def has_permission(self, request, view):
+            return not all(
+                role._has_permission(request, view) for role in
+                self._joined_role_instances
+            )
+
+        return _create_joined_class(is_active, has_permission, cls)
 
 
-class Role(object):
+class Role(with_metaclass(RoleMeta, object)):
     """Base class for constructing role-based permissions."""
-
-    __metaclass__ = RoleMeta
+    __register__ = False
 
     def __init__(self, request, view):
         """Init receives request and view as arguments."""
@@ -124,3 +184,28 @@ class Role(object):
         # down the queryset immediately after the view's get_queryset is
         # completed.
         pass
+
+
+def _create_joined_class(new_is_active, new_has_permission, *joined_roles):
+    """
+    Generates a class whose core boolean methods (`is_active` and
+    `_has_permission`) are derived from boolean operations on the provided
+    classes' methods of the same name.
+    """
+    class JoinedRole(Role):
+        __register__ = False
+        _joined_roles = joined_roles
+
+        def __init__(self, request, view):
+            self._joined_role_instances = tuple(
+                role_cls(request, view) for role_cls in self._joined_roles
+            )
+            super(JoinedRole, self).__init__(request, view)
+
+        def get_permissions(self, request, view):
+            raise NotImplementedError('As a joined Rp')
+
+        is_active = new_is_active
+        _has_permission = new_has_permission
+
+    return JoinedRole
