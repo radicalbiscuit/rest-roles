@@ -120,7 +120,7 @@ class Role(with_metaclass(RoleMeta, object)):
         permissions = self.get_permissions(request, view)
 
         # Retrieve the permissions specific to the current view
-        view_cls = view.cls
+        view_cls = view.__class__
         if ALL_VIEWS in permissions:
             if len(permissions) > 1:
                 raise RoleConfigurationError(
@@ -156,7 +156,11 @@ class Role(with_metaclass(RoleMeta, object)):
 
     def _get_action(self, request, view):
         """Retrieve the action being attempted in this request."""
-        pass
+        # Logic is basically the same as DRF's own: http://git.io/vZVUq
+        method = request.method.lower()
+        if method == 'options':
+            return 'metadata'
+        return view.action_map.get(method)
 
     def _enforce_fields(self, request, view, fields):
         """Dynamically restrict the fields in the serializer."""
